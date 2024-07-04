@@ -13,6 +13,10 @@ import os
 from docx import Document
 from docx.shared import Inches
 import requests
+from pix2text import Pix2Text
+from io import BytesIO
+
+import io
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
@@ -186,6 +190,95 @@ if canvas_result.json_data is not None or whole_image:
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
 
+MAX_WIDTH = 800
+MAX_HEIGHT = 1000
+
+
+def convert_strokes_to_image(canvas_json_data, canvas_width, canvas_height):
+    # Create a blank white image
+    image = Image.new('RGB', (canvas_width, canvas_height), color='white')
+    draw = ImageDraw.Draw(image)
+
+    # Process each stroke from the JSON data
+    for obj in canvas_json_data:
+        if obj['type'] == 'rect':
+            left = int(obj['left'])
+            top = int(obj['top'])
+            right = int(left + obj['width'])
+            bottom = int(top + obj['height'])
+            draw.rectangle([left, top, right, bottom],
+                           fill=None, outline='black')
+
+    return image
+
+
+drawing_mode = st.sidebar.selectbox(
+    "Drawing tool:",
+    ("freedraw", "line", "rect", "circle", "transform", "polygon", "point"),
+)
+stroke_width = st.sidebar.slider("Stroke width: ", 1, 25, 3)
+if drawing_mode == "point":
+    point_display_radius = st.sidebar.slider(
+        "Point display radius: ", 1, 25, 3)
+stroke_color = st.sidebar.color_picker("Stroke color hex: ")
+bg_color = st.sidebar.color_picker("Background color hex: ", "#eee")
+bg_image = st.sidebar.file_uploader("Background image:", type=["png", "jpg"])
+
+realtime_update = st.sidebar.checkbox("Update in realtime", True)
+
+# Create a canvas component
+canvas_result = st_canvas(
+    fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+    stroke_width=stroke_width,
+    stroke_color=stroke_color,
+    background_color=bg_color,
+    background_image=Image.open(bg_image) if bg_image else None,
+    update_streamlit=realtime_update,
+    height=150,
+    drawing_mode=drawing_mode,
+    point_display_radius=point_display_radius if drawing_mode == "point" else 0,
+    display_toolbar=st.sidebar.checkbox("Display toolbar", True),
+    key="full_app",
+)
+
+
+def convert_handwritten_to_latex(img_fp):
+    try:
+        # Convert handwritten math expression to LaTeX
+        p2t = Pix2Text()
+        latex_formula = p2t.recognize_formula(img_fp)
+        return latex_formula
+
+    except Exception as e:
+        print(f"Error converting handwritten to LaTeX: {e}")
+        return None
+
+
+# Display the canvas image
+def array_to_image(array):
+    return Image.fromarray(array.astype('uint8'))
+
+
+# Assuming canvas_result.image_data is the drawn image data as a NumPy array
+if canvas_result.image_data is not None:
+    st.image(canvas_result.image_data)
+
+    # Option to convert drawn image to LaTeX
+    if st.button('Convert to LaTeX'):
+        try:
+            # Convert NumPy array to PIL Image
+            image_pil = array_to_image(canvas_result.image_data)
+
+            # Convert handwritten math expression to LaTeX
+            latex_formula = convert_handwritten_to_latex(image_pil)
+
+            # Display LaTeX output
+            st.write(f"LaTeX Formula: {latex_formula}")
+
+        except Exception as e:
+            st.error(f"Error converting handwritten to LaTeX: {e}")
+
+# Display the JSON data as a DataFrame
 
 with col2:
     with st.expander("Usage tips"):
