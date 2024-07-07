@@ -11,10 +11,10 @@ import pandas as pd
 import io
 import os
 from docx import Document
-from docx.shared import Inches
-import requests
-from pix2text import Pix2Text
-import torch
+# from docx.shared import Inches
+# import requests
+# from pix2text import Pix2Text
+# import torch
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
